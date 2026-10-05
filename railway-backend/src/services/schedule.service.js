@@ -1,6 +1,6 @@
-pool = require('../db');
+const pool = require('../db');
 
-async function search([from , to , date]){
+async function search(from, to, date){
   const [rows] = await pool.query(
     `SELECT s.schedule_id, t.train_number, t.train_name,
             fs.name AS from_station, ts.name AS to_station,
