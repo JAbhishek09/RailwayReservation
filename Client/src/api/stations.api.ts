@@ -5,15 +5,11 @@ import { MOCK_STATIONS } from './mockData';
 
 export const fetchStations = async (): Promise<Station[]> => {
   if (ENV.USE_MOCK_API) {
+    // [MOCK MODE] Returns hardcoded mock stations — toggle USE_MOCK_API in env.ts
     return MOCK_STATIONS;
   }
-  try {
-    const response = await apiClient.get<Station[]>('/stations');
-    return response.data;
-  } catch (error) {
-    // If backend is unreachable, return mock stations as fallback in development
-    console.warn('[Stations API] Fetch failed, falling back to mock stations:', (error as Error).message);
-    return MOCK_STATIONS;
-  }
+  // Real API call — errors propagate to React Query → ErrorState shown to user
+  const response = await apiClient.get<Station[]>('/stations');
+  return response.data;
 };
 

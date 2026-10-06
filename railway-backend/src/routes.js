@@ -25,6 +25,10 @@ router.get('/bookings/:id', wrap(async (req, res) => {
   res.json(await bookings.getBooking(req.params.id));
 }));
 
+router.get('/users/:userId/bookings', wrap(async (req, res) => {
+  res.json(await bookings.getUserBookings(req.params.userId));
+}));
+
 router.post('/bookings/:id/cancel', wrap(async (req, res) => {
   res.json(await bookings.cancelBooking(req.params.id));
 }));

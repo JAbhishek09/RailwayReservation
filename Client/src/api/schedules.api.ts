@@ -5,15 +5,11 @@ import { MOCK_SCHEDULES } from './mockData';
 
 export const fetchSchedules = async (params: SearchScheduleParams): Promise<Schedule[]> => {
   if (ENV.USE_MOCK_API) {
+    // [MOCK MODE] Returns hardcoded mock data — toggle USE_MOCK_API in env.ts
     return MOCK_SCHEDULES;
   }
-  try {
-    const response = await apiClient.get<Schedule[]>('/schedules', { params });
-    return response.data;
-  } catch (error) {
-    console.warn('[Schedules API] Server search failed, falling back to mock schedules:', (error as Error).message);
-    // Return mock data for dev testing if backend is offline
-    return MOCK_SCHEDULES;
-  }
+  // Real API call — errors propagate to React Query → ErrorState shown to user
+  const response = await apiClient.get<Schedule[]>('/schedules', { params });
+  return response.data;
 };
 

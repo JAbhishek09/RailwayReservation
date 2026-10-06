@@ -3,19 +3,6 @@ import { Booking, CreateBookingPayload } from '../types/booking';
 import { ENV } from '../config/env';
 import { MOCK_BOOKINGS } from './mockData';
 
-// Local array to store created booking IDs in current session / local storage layer
-const sessionBookingIds: number[] = [7]; // Seeded default booking ID for testing
-
-export const addBookingIdToHistory = (bookingId: number) => {
-  if (!sessionBookingIds.includes(bookingId)) {
-    sessionBookingIds.unshift(bookingId);
-  }
-};
-
-export const getSessionBookingIds = (): number[] => {
-  return [...sessionBookingIds];
-};
-
 /**
  * POST /bookings
  * Create a new railway booking.
@@ -41,14 +28,10 @@ export const createBooking = async (payload: CreateBookingPayload): Promise<Book
       })),
     };
     MOCK_BOOKINGS[newId] = mockBooking;
-    addBookingIdToHistory(newId);
     return mockBooking;
   }
 
   const response = await apiClient.post<Booking>('/bookings', payload);
-  if (response.data?.booking_id) {
-    addBookingIdToHistory(response.data.booking_id);
-  }
   return response.data;
 };
 
@@ -65,16 +48,8 @@ export const fetchBookingById = async (id: number | string): Promise<Booking> =>
     throw new Error('Booking not found');
   }
 
-  try {
-    const response = await apiClient.get<Booking>(`/bookings/${id}`);
-    return response.data;
-  } catch (error) {
-    const numericId = Number(id);
-    if (MOCK_BOOKINGS[numericId]) {
-      return MOCK_BOOKINGS[numericId];
-    }
-    throw error;
-  }
+  const response = await apiClient.get<Booking>(`/bookings/${id}`);
+  return response.data;
 };
 
 /**
@@ -107,24 +82,18 @@ export const cancelBooking = async (id: number | string): Promise<Booking> => {
 };
 
 /**
- * Helper to fetch all bookings for current user.
- * Fetches all saved booking IDs in parallel via GET /bookings/:id.
+ * GET /users/:userId/bookings
+ * Fetch all bookings for a user from the backend (newest first).
+ * In mock mode, returns the in-memory mock bookings instead.
  */
 export const fetchUserBookings = async (userId: number = ENV.DEFAULT_USER_ID): Promise<Booking[]> => {
-  const ids = getSessionBookingIds();
-  if (ids.length === 0) {
-    return [];
+  if (ENV.USE_MOCK_API) {
+    return Object.values(MOCK_BOOKINGS)
+      .filter((b) => b.user_id === userId)
+      .sort((a, b) => b.booking_id - a.booking_id);
   }
 
-  const results = await Promise.allSettled(ids.map((id) => fetchBookingById(id)));
-  const bookings: Booking[] = [];
-  for (const res of results) {
-    if (res.status === 'fulfilled' && res.value) {
-      if (res.value.user_id === userId) {
-        bookings.push(res.value);
-      }
-    }
-  }
-  return bookings;
+  const response = await apiClient.get<Booking[]>(`/users/${userId}/bookings`);
+  return response.data;
 };
 

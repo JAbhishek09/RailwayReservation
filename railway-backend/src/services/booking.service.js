@@ -95,7 +95,34 @@ async function getBooking(bookingId) {
      WHERE bp.booking_id = ?`,
     [bookingId]
   );
-  return { ...booking, passengers };
+
+  // Include schedule + train info so the frontend can display train name/route
+  const [[schedule]] = await pool.query(
+    `SELECT s.schedule_id, t.train_number, t.train_name,
+            fs.name AS from_station, fs.code AS from_code,
+            ts.name AS to_station, ts.code AS to_code,
+            s.departure_time, s.arrival_time, s.fare,
+            (SELECT COUNT(*) FROM schedule_seat ss2
+             WHERE ss2.schedule_id = s.schedule_id AND ss2.status = 'AVAILABLE') AS available_seats
+     FROM schedule s
+     JOIN train t    ON t.train_id = s.train_id
+     JOIN station fs ON fs.station_id = s.from_station_id
+     JOIN station ts ON ts.station_id = s.to_station_id
+     WHERE s.schedule_id = ?`,
+    [booking.schedule_id]
+  );
+
+  return { ...booking, passengers, schedule: schedule || null };
+}
+
+async function getUserBookings(userId) {
+  const id = Number(userId);
+  if (!Number.isInteger(id) || id <= 0) throw new AppError(400, 'Invalid userId');
+
+  const [rows] = await pool.query(
+    'SELECT booking_id FROM booking WHERE user_id = ? ORDER BY created_at DESC, booking_id DESC',
+    [id]);
+  return Promise.all(rows.map((r) => getBooking(r.booking_id)));
 }
 
 async function cancelBooking(bookingId) {
@@ -113,10 +140,14 @@ async function cancelBooking(bookingId) {
        WHERE booking_id = ? AND status <> 'CANCELLED'`, [bookingId]);
     if (!people.length) throw new AppError(409, 'Already cancelled');
 
-    for (const p of people) {
-      await conn.query(
-        "UPDATE booking_passenger SET status = 'CANCELLED' WHERE bp_id = ?", [p.bp_id]);
+    // Cancel every passenger of this booking up front. Otherwise the waitlist
+    // promotion below could hand a freed seat to another passenger of the SAME
+    // booking, who would then be cancelled with a stale status and leak the seat.
+    await conn.query(
+      "UPDATE booking_passenger SET status = 'CANCELLED' WHERE booking_id = ? AND status <> 'CANCELLED'",
+      [bookingId]);
 
+    for (const p of people) {
       if (p.status !== 'CONFIRMED') continue;   // waitlisted people have no seat to free
 
       // Find the seat this passenger was holding
@@ -165,4 +196,4 @@ async function cancelBooking(bookingId) {
   }
 }
 
-module.exports = { createBooking, getBooking, cancelBooking };
+module.exports = { createBooking, getBooking, getUserBookings, cancelBooking };
